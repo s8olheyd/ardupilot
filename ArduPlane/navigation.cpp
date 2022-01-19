@@ -140,11 +140,20 @@ float Plane::mode_auto_target_airspeed_cm()
 
 void Plane::calc_airspeed_errors()
 {
+    // Get the airspeed_estimate, update smoothed airspeed estimate
+    // NOTE:  we use the airspeed estimate function not direct sensor
+    //        as TECS may be using synthetic airspeed
     float airspeed_measured = 0;
+    if (ahrs.airspeed_estimate(airspeed_measured)) {
+        smoothed_airspeed = smoothed_airspeed * 0.8f + airspeed_measured * 0.2f;
+    }
 
-    // we use the airspeed estimate function not direct sensor as TECS
-    // may be using synthetic airspeed
-    ahrs.airspeed_estimate(airspeed_measured);
+    // low pass filter speed scaler, with 1Hz cutoff, at 10Hz
+    const float speed_scaler = calc_speed_scaler();
+    const float cutoff_Hz = 2.0;
+    const float dt = 0.1;
+    surface_speed_scaler += calc_lowpass_alpha_dt(dt, cutoff_Hz) * (speed_scaler - surface_speed_scaler);
+
 
     // FBW_B/cruise airspeed target
     if (!failsafe.rc_failsafe && (control_mode == &mode_fbwb || control_mode == &mode_cruise)) {
@@ -193,6 +202,27 @@ void Plane::calc_airspeed_errors()
         }
 
 #endif // OFFBOARD_GUIDED == ENABLED
+
+#if HAL_SOARING_ENABLED
+    } else if (g2.soaring_controller.is_active() && g2.soaring_controller.get_throttle_suppressed()) {
+        if (control_mode == &mode_thermal) {
+            float arspd = g2.soaring_controller.get_thermalling_target_airspeed();
+
+            if (arspd > 0) {
+                target_airspeed_cm = arspd * 100;
+            } else {
+                target_airspeed_cm = aparm.airspeed_cruise_cm;
+            }
+        } else if (control_mode == &mode_auto) {
+            float arspd = g2.soaring_controller.get_cruising_target_airspeed();
+
+            if (arspd > 0) {
+                target_airspeed_cm = arspd * 100;
+            } else {
+                target_airspeed_cm = aparm.airspeed_cruise_cm;
+            }
+        }
+#endif
 
     } else if (flight_stage == AP_Vehicle::FixedWing::FLIGHT_LAND) {
         // Landing airspeed target

@@ -3180,6 +3180,21 @@ class AutoTest(ABC):
         if not temp_ok:
             raise NotAchievedException("target temperature")
 
+    def assert_message_field_values(self, m, fieldvalues, verbose=True):
+        for (fieldname, value) in fieldvalues.items():
+            got = getattr(m, fieldname)
+            if got != value:
+                raise NotAchievedException("Expected %s.%s to be %s, got %s" %
+                                           (m.get_type(), fieldname, value, got))
+            if verbose:
+                self.progress("%s.%s has expected value %s" %
+                              (m.get_type(), fieldname, value))
+
+    def assert_received_message_field_values(self, message, fieldvalues, verbose=True, very_verbose=False):
+        m = self.assert_receive_message(message, verbose=verbose, very_verbose=very_verbose)
+        self.assert_message_field_values(m, fieldvalues, verbose=verbose)
+        return m
+
     def onboard_logging_not_log_disarmed(self):
         self.start_subtest("Test LOG_DISARMED-is-false behaviour")
         self.set_parameter("LOG_DISARMED", 0)
@@ -3524,10 +3539,12 @@ class AutoTest(ABC):
                 raise ValueError("count %u not handled" % count)
         self.progress("Files same")
 
-    def assert_receive_message(self, type, timeout=1, verbose=False):
+    def assert_receive_message(self, type, timeout=1, verbose=False, very_verbose=False):
         m = self.mav.recv_match(type=type, blocking=True, timeout=timeout)
         if verbose:
             self.progress("Received (%s)" % str(m))
+        if very_verbose:
+            self.progress(self.dump_message_verbose(m))
         if m is None:
             raise NotAchievedException("Did not get %s" % type)
         return m
@@ -6078,6 +6095,45 @@ class AutoTest(ABC):
         if m is not None:
             raise NotAchievedException("Fence status received unexpectedly")
 
+    def assert_prearm_failure(self, expected_statustext, timeout=5, ignore_prearm_failures=[]):
+        seen_statustext = False
+        seen_command_ack = False
+
+        self.drain_mav()
+        tstart = self.get_sim_time_cached()
+        arm_last_send = 0
+        while True:
+            if seen_command_ack and seen_statustext:
+                break
+            now = self.get_sim_time_cached()
+            if now - tstart > timeout:
+                raise NotAchievedException(
+                    "Did not see failure-to-arm messages (statustext=%s command_ack=%s" %
+                    (seen_statustext, seen_command_ack))
+            if now - arm_last_send > 1:
+                arm_last_send = now
+                self.send_mavlink_arm_command()
+            m = self.mav.recv_match(blocking=True, timeout=1)
+            if m is None:
+                continue
+            if m.get_type() == "STATUSTEXT":
+                if expected_statustext in m.text:
+                    self.progress("Got: %s" % str(m))
+                    seen_statustext = True
+                elif "PreArm" in m.text and m.text[8:] not in ignore_prearm_failures:
+                    self.progress("Got: %s" % str(m))
+                    raise NotAchievedException("Unexpected prearm failure (%s)" % m.text)
+
+            if m.get_type() == "COMMAND_ACK":
+                print("Got: %s" % str(m))
+                if m.command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM:
+                    if m.result != 4:
+                        raise NotAchievedException("command-ack says we didn't fail to arm")
+                    self.progress("Got: %s" % str(m))
+                    seen_command_ack = True
+            if self.mav.motors_armed():
+                raise NotAchievedException("Armed when we shouldn't have")
+
     def wait_ready_to_arm(self, timeout=120, require_absolute=True, check_prearm_bit=True):
         # wait for EKF checks to pass
         self.progress("Waiting for ready to arm")
@@ -7807,6 +7863,7 @@ Also, ignores heartbeats not from our target system'''
         try:
             self.set_parameter("LOG_BACKEND_TYPE", 4)
             self.set_parameter("LOG_FILE_DSRMROT", 1)
+            self.set_parameter("LOG_BLK_RATEMAX", 1)
             self.reboot_sitl()
             # First log created here, but we are in chip erase so ignored
             mavproxy.send("module load log\n")
@@ -8489,7 +8546,7 @@ Also, ignores heartbeats not from our target system'''
     def test_request_message(self, timeout=60):
         rate = round(self.get_message_rate("CAMERA_FEEDBACK", 10))
         if rate != 0:
-            raise PreconditionFailedException("Receving camera feedback")
+            raise PreconditionFailedException("Receiving camera feedback")
         m = self.poll_message("CAMERA_FEEDBACK")
         if m is None:
             raise NotAchievedException("Requested CAMERA_FEEDBACK did not arrive")
@@ -10082,6 +10139,9 @@ switch value'''
                 want_result=mavutil.mavlink.MAV_RESULT_FAILED
             )
             self.wait_statustext("PreArm: Motors Emergency Stopped", check_context=True)
+            self.reboot_sitl()
+            self.delay_sim_time(10)
+            self.assert_prearm_failure("Motors Emergency Stopped")
             self.context_pop()
             self.reboot_sitl()
 

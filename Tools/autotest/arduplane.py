@@ -2246,6 +2246,103 @@ function'''
 
         self.progress("Mission OK")
 
+    def fly_soaring_speed_to_fly(self):
+
+        model = "plane-soaring"
+
+        self.customise_SITL_commandline(
+            [],
+            model=model,
+            defaults_filepath=self.model_defaults_filepath(model),
+            wipe=True)
+
+        self.load_mission('CMAC-soar.txt', strict=False)
+
+        # Turn of environmental thermals.
+        self.set_parameter("SIM_THML_SCENARI", 0)
+
+        # Get thermalling RC channel
+        rc_chan = 0
+        for i in range(8):
+            rcx_option = self.get_parameter('RC{0}_OPTION'.format(i+1))
+            if rcx_option == 88:
+                rc_chan = i+1
+                break
+
+        if rc_chan == 0:
+            raise NotAchievedException("Did not find soaring enable channel option.")
+
+        # Disable soaring
+        self.set_rc(rc_chan, 1100)
+
+        self.set_current_waypoint(1)
+        self.change_mode('AUTO')
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+
+        # Wait for to 400m before starting.
+        self.wait_altitude(390, 400, timeout=600, relative=True)
+
+        # Wait 10s to stabilize.
+        self.delay_sim_time(30)
+
+        # Enable soaring (no automatic thermalling)
+        self.set_rc(rc_chan, 1500)
+
+        # Enable speed to fly.
+        self.set_parameter("SOAR_CRSE_ARSPD", -1)
+
+        # Set appropriate McCready.
+        self.set_parameter("SOAR_VSPEED", 1)
+        self.set_parameter("SIM_WIND_SPD", 0)
+
+        # Wait a few seconds before determining the "trim" airspeed.
+        self.delay_sim_time(20)
+        m = self.mav.recv_match(type='VFR_HUD', blocking=True)
+        trim_airspeed = m.airspeed
+
+        min_airspeed = self.get_parameter("ARSPD_FBW_MIN")
+        max_airspeed = self.get_parameter("ARSPD_FBW_MAX")
+
+        # Add updraft
+        self.set_parameter("SIM_WIND_SPD", 1)
+        self.set_parameter('SIM_WIND_DIR_Z', 90)
+        self.delay_sim_time(20)
+        m = self.mav.recv_match(type='VFR_HUD', blocking=True)
+
+        if not m.airspeed < trim_airspeed and trim_airspeed > min_airspeed:
+            raise NotAchievedException("Airspeed did not reduce in updraft")
+
+        # Add downdraft
+        self.set_parameter('SIM_WIND_DIR_Z', -90)
+        self.delay_sim_time(20)
+        m = self.mav.recv_match(type='VFR_HUD', blocking=True)
+
+        if not m.airspeed > trim_airspeed and trim_airspeed < max_airspeed:
+            raise NotAchievedException("Airspeed did not increase in downdraft")
+
+        # Zero the wind and increase McCready.
+        self.set_parameter("SIM_WIND_SPD", 0)
+        self.set_parameter("SOAR_VSPEED", 2)
+        self.delay_sim_time(20)
+        m = self.mav.recv_match(type='VFR_HUD', blocking=True)
+
+        if not m.airspeed > trim_airspeed and trim_airspeed < max_airspeed:
+            raise NotAchievedException("Airspeed did not increase with higher SOAR_VSPEED")
+
+        # Reduce McCready.
+        self.set_parameter("SOAR_VSPEED", 0)
+        self.delay_sim_time(20)
+        m = self.mav.recv_match(type='VFR_HUD', blocking=True)
+
+        if not m.airspeed < trim_airspeed and trim_airspeed > min_airspeed:
+            raise NotAchievedException("Airspeed did not reduce with lower SOAR_VSPEED")
+
+        # Disarm
+        self.disarm_vehicle()
+
+        self.progress("Mission OK")
+
     def test_airspeed_drivers(self):
         airspeed_sensors = [
             ("MS5525", 3, 1),
@@ -3208,7 +3305,7 @@ function'''
         self.set_parameters({
             "EK3_POS_I_GATE": 0,
             "SIM_GPS_HZ": 1,
-            "GPS_DELAY_MS": 300,
+            "SIM_GPS_LAG_MS": 1000,
         })
         self.wait_statustext("DCM Active", check_context=True, timeout=60)
         self.wait_statustext("EKF3 Active", check_context=True)
@@ -3250,6 +3347,91 @@ function'''
             raise NotAchievedException("Not healthy")
         if m.intake_manifold_temperature < 20:
             raise NotAchievedException("Bad intake manifold temperature")
+
+    def test_glide_slope_threshold(self):
+
+        # Test that GLIDE_SLOPE_THRESHOLD correctly controls re-planning glide slope
+        # in the scenario that aircraft is above planned slope and slope is positive (climbing).
+        #
+        #
+        #  Behaviour with GLIDE_SLOPE_THRESH = 0 (no slope replanning)
+        #       (2)..      __(4)
+        #         |  \..__/
+        #         |  __/
+        #         (3)
+        #
+        # Behaviour with GLIDE_SLOPE_THRESH = 5 (slope replanning when >5m error)
+        #       (2)........__(4)
+        #         |     __/
+        #         |  __/
+        #         (3)
+        # Solid is plan, dots are actual flightpath.
+
+        self.load_mission('rapid-descent-then-climb.txt', strict=False)
+
+        self.set_current_waypoint(1)
+        self.change_mode('AUTO')
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+
+        #
+        # Initial run with GLIDE_SLOPE_THR = 5 (default).
+        #
+        self.set_parameter("GLIDE_SLOPE_THR", 5)
+
+        # Wait for waypoint commanding rapid descent, followed by climb.
+        self.wait_current_waypoint(5, timeout=1200)
+
+        # Altitude should not descend significantly below the initial altitude
+        init_altitude = self.get_altitude(relative=True, timeout=2)
+        timeout = 600
+        wpnum = 7
+        tstart = self.get_sim_time()
+        while True:
+            if self.get_sim_time() - tstart > timeout:
+                raise AutoTestTimeoutException("Did not get wanted current waypoint")
+
+            if (self.get_altitude(relative=True, timeout=2) - init_altitude) < -10:
+                raise NotAchievedException("Descended >10m before reaching desired waypoint,\
+  indicating slope was not replanned")
+
+            seq = self.mav.waypoint_current()
+            self.progress("Waiting for wp=%u current=%u" % (wpnum, seq))
+            if seq == wpnum:
+                break
+
+        self.set_current_waypoint(2)
+
+        #
+        # Second run with GLIDE_SLOPE_THR = 0 (no re-plan).
+        #
+        self.set_parameter("GLIDE_SLOPE_THR", 0)
+
+        # Wait for waypoint commanding rapid descent, followed by climb.
+        self.wait_current_waypoint(5, timeout=1200)
+
+        # This time altitude should descend significantly below the initial altitude
+        init_altitude = self.get_altitude(relative=True, timeout=2)
+        timeout = 600
+        wpnum = 7
+        tstart = self.get_sim_time()
+        while True:
+            if self.get_sim_time() - tstart > timeout:
+                raise AutoTestTimeoutException("Did not get wanted altitude")
+
+            seq = self.mav.waypoint_current()
+            self.progress("Waiting for wp=%u current=%u" % (wpnum, seq))
+            if seq == wpnum:
+                raise NotAchievedException("Reached desired waypoint without first decending 10m,\
+ indicating slope was replanned unexpectedly")
+
+            if (self.get_altitude(relative=True, timeout=2) - init_altitude) < -10:
+                break
+
+        # Disarm
+        self.wait_disarmed(timeout=600)
+
+        self.progress("Mission OK")
 
     def tests(self):
         '''return list of all tests'''
@@ -3499,6 +3681,14 @@ function'''
             ("MSP_DJI",
              "Test MSP DJI serial output",
              self.test_msp_dji),
+
+            ("SpeedToFly",
+             "Test soaring speed-to-fly",
+             self.fly_soaring_speed_to_fly),
+
+            ("GlideSlopeThresh",
+             "Test rebuild glide slope if above and climbing",
+             self.test_glide_slope_threshold),
 
             ("LogUpload",
              "Log upload",

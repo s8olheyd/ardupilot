@@ -290,7 +290,9 @@ void AP_UAVCAN::init(uint8_t driver_index, bool enable_filters)
     AP_Baro_UAVCAN::subscribe_msgs(this);
     AP_BattMonitor_UAVCAN::subscribe_msgs(this);
     AP_Airspeed_UAVCAN::subscribe_msgs(this);
+#if AP_OPTICALFLOW_HEREFLOW_ENABLED
     AP_OpticalFlow_HereFlow::subscribe_msgs(this);
+#endif
     AP_RangeFinder_UAVCAN::subscribe_msgs(this);
 
     act_out_array[driver_index] = new uavcan::Publisher<uavcan::equipment::actuator::ArrayCommand>(*_node);
@@ -923,7 +925,7 @@ void AP_UAVCAN::handle_ESC_status(AP_UAVCAN* ap_uavcan, uint8_t node_id, const E
     }
 
     TelemetryData t {
-        .temperature_cdeg = int16_t((cb.msg->temperature - C_TO_KELVIN) * 100),
+        .temperature_cdeg = int16_t((KELVIN_TO_C(cb.msg->temperature)) * 100),
         .voltage = cb.msg->voltage,
         .current = cb.msg->current,
     };

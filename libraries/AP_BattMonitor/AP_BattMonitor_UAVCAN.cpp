@@ -130,7 +130,7 @@ void AP_BattMonitor_UAVCAN::update_interim_state(const float voltage, const floa
 
     if (!isnanf(temperature_K) && temperature_K > 0) {
         // Temperature reported from battery in kelvin and stored internally in Celsius.
-        _interim_state.temperature = temperature_K - C_TO_KELVIN;
+        _interim_state.temperature = KELVIN_TO_C(temperature_K);
         _interim_state.temperature_time = AP_HAL::millis();
     }
 
@@ -141,8 +141,7 @@ void AP_BattMonitor_UAVCAN::update_interim_state(const float voltage, const floa
 
         // update total current drawn since startup
         if (_interim_state.last_time_micros != 0 && dt < 2000000) {
-            // .0002778 is 1/3600 (conversion to hours)
-            float mah = (float) ((double) _interim_state.current_amps * (double) dt * (double) 0.0000002778f);
+            float mah = calculate_mah(_interim_state.current_amps, dt);
             _interim_state.consumed_mah += mah;
             _interim_state.consumed_wh  += 0.001f * mah * _interim_state.voltage;
         }
@@ -183,10 +182,10 @@ void AP_BattMonitor_UAVCAN::handle_mppt_stream(const MpptStreamCb &cb)
     const float current = use_input_value ? cb.msg->input_current : cb.msg->output_current;
 
     // use an invalid soc so we use the library calculated one
-    const uint8_t soc = 101;
+    const uint8_t soc = 127;
 
     // convert C to Kelvin
-    const float temperature_K = isnanf(cb.msg->temperature) ? 0 : cb.msg->temperature + C_TO_KELVIN;
+    const float temperature_K = isnanf(cb.msg->temperature) ? 0 : C_TO_KELVIN(cb.msg->temperature);
 
     update_interim_state(voltage, current, temperature_K, soc); 
 
@@ -264,9 +263,10 @@ bool AP_BattMonitor_UAVCAN::capacity_remaining_pct(uint8_t &percentage) const
 {
     if ((uint32_t(_params._options.get()) & uint32_t(AP_BattMonitor_Params::Options::Ignore_UAVCAN_SoC)) ||
         _mppt.is_detected ||
-        _soc > 100) {
+        _soc == 127) {
         // a UAVCAN battery monitor may not be able to supply a state of charge. If it can't then
         // the user can set the option to use current integration in the backend instead.
+        // SOC of 127 is used as an invalid SOC flag ie system configuration errors or SOC estimation unavailable
         return AP_BattMonitor_Backend::capacity_remaining_pct(percentage);
     }
 

@@ -28,7 +28,6 @@
 #include <AP_Common/ExpandingString.h>
 #include "sdcard.h"
 #include "shared_dma.h"
-#include <AP_Common/ExpandingString.h>
 #if defined(HAL_PWM_ALARM) || HAL_DSHOT_ALARM || HAL_CANMANAGER_ENABLED
 #include <AP_Notify/AP_Notify.h>
 #endif
@@ -587,10 +586,10 @@ void Util::apply_persistent_params(void) const
 extern ChibiOS::UARTDriver uart_io;
 #endif
 
+#if HAL_UART_STATS_ENABLED
 // request information on uart I/O
 void Util::uart_info(ExpandingString &str)
 {
-#if !defined(HAL_NO_UARTDRIVER)    
     // a header to allow for machine parsers to determine format
     str.printf("UARTV1\n");
     for (uint8_t i = 0; i < HAL_UART_NUM_SERIAL_PORTS; i++) {
@@ -604,8 +603,8 @@ void Util::uart_info(ExpandingString &str)
     str.printf("IOMCU   ");
     uart_io.uart_info(str);
 #endif
-#endif // HAL_NO_UARTDRIVER
 }
+#endif
 
 /**
  * This method will generate random values with set size. It will fall back to AP_Math's get_random16()
@@ -723,7 +722,6 @@ void* Util::last_crash_dump_ptr() const
 {
 #if HAL_GCS_ENABLED && HAL_CRASHDUMP_ENABLE
     if (last_crash_dump_size() == 0) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "No Crash Detected!");
         return nullptr;
     }
     return (void*)stm32_crash_dump_addr();

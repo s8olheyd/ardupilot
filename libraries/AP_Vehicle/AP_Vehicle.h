@@ -219,8 +219,6 @@ public:
     virtual bool nav_script_time(uint16_t &id, uint8_t &cmd, float &arg1, float &arg2) { return false; }
     virtual void nav_script_time_done(uint16_t id) {}
 
-#endif // AP_SCRIPTING_ENABLED
-
 
     // control outputs enumeration
     enum class ControlOutput {
@@ -239,8 +237,8 @@ public:
     // returns true on success and control_value is set to a value in the range -1 to +1
     virtual bool get_control_output(AP_Vehicle::ControlOutput control_output, float &control_value) { return false; }
 
-    // write out harmonic notch log messages
-    void write_notch_log_messages() const;
+#endif // AP_SCRIPTING_ENABLED
+
     // update the harmonic notch
     virtual void update_dynamic_notch() {};
 
@@ -367,6 +365,10 @@ protected:
 #if HAL_EFI_ENABLED
     // EFI Engine Monitor
     AP_EFI efi;
+#endif
+
+#if AP_AIRSPEED_ENABLED
+    AP_Airspeed airspeed;
 #endif
 
     static const struct AP_Param::GroupInfo var_info[];

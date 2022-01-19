@@ -18,6 +18,7 @@ SOURCE_EXTS = [
 ]
 
 COMMON_VEHICLE_DEPENDENT_LIBRARIES = [
+    'AP_Airspeed',
     'AP_AccelCal',
     'AP_ADC',
     'AP_AHRS',
@@ -518,8 +519,9 @@ def _select_programs_from_group(bld):
         else:
             bld.targets = tg.name
 
-        for tg in _grouped_programs[group][1:]:
-            bld.targets += ',' + tg.name
+        if len(_grouped_programs[group]) > 2:
+            for tg in _grouped_programs[group][1:]:
+                bld.targets += ',' + tg.name
 
 def options(opt):
     opt.ap_groups = {

@@ -67,6 +67,12 @@ const AP_Param::GroupInfo AP_Vehicle::var_info[] = {
     AP_SUBGROUPINFO(efi, "EFI", 9, AP_Vehicle, AP_EFI),
 #endif
 
+#if AP_AIRSPEED_ENABLED
+    // @Group: ARSPD
+    // @Path: ../AP_Airspeed/AP_Airspeed.cpp
+    AP_SUBGROUPINFO(airspeed, "ARSPD", 10, AP_Vehicle, AP_Airspeed),
+#endif
+
     AP_GROUPEND
 };
 
@@ -146,13 +152,25 @@ void AP_Vehicle::setup()
     // init_ardupilot is where the vehicle does most of its initialisation.
     init_ardupilot();
 
+#if AP_AIRSPEED_ENABLED
+    airspeed.init();
+    if (airspeed.enabled()) {
+        airspeed.calibrate(true);
+    } 
+#if APM_BUILD_TYPE(APM_BUILD_ArduPlane)
+    else {
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING,"No airspeed sensor present or enabled");
+    }
+#endif
+#endif  // AP_AIRSPEED_ENABLED
+
 #if !APM_BUILD_TYPE(APM_BUILD_Replay)
     SRV_Channels::init();
 #endif
 
     // gyro FFT needs to be initialized really late
 #if HAL_GYROFFT_ENABLED
-    gyro_fft.init(AP::scheduler().get_loop_period_us());
+    gyro_fft.init(AP::scheduler().get_loop_rate_hz());
 #endif
 #if HAL_RUNCAM_ENABLED
     runcam.init();
@@ -256,6 +274,9 @@ SCHED_TASK_CLASS arguments:
 
  */
 const AP_Scheduler::Task AP_Vehicle::scheduler_tasks[] = {
+#if AP_AIRSPEED_ENABLED
+    SCHED_TASK_CLASS(AP_Airspeed,  &vehicle.airspeed,       update,                   10, 100, 41),    // NOTE: the priority number here should be right before Plane's calc_airspeed_errors
+#endif
 #if HAL_RUNCAM_ENABLED
     SCHED_TASK_CLASS(AP_RunCam,    &vehicle.runcam,         update,                   50, 50, 200),
 #endif
@@ -362,22 +383,6 @@ bool AP_Vehicle::is_crashed() const
         return false;
     }
     return AP::arming().last_disarm_method() == AP_Arming::Method::CRASH;
-}
-
-// @LoggerMessage: FTN
-// @Description: Filter Tuning Messages
-// @Field: TimeUS: microseconds since system startup
-// @Field: NDn: number of active dynamic harmonic notches
-// @Field: DnF1: dynamic harmonic notch centre frequency for motor 1
-// @Field: DnF2: dynamic harmonic notch centre frequency for motor 2
-// @Field: DnF3: dynamic harmonic notch centre frequency for motor 3
-// @Field: DnF4: dynamic harmonic notch centre frequency for motor 4
-void AP_Vehicle::write_notch_log_messages() const
-{
-    const float* notches = ins.get_gyro_dynamic_notch_center_frequencies_hz();
-    AP::logger().Write(
-        "FTN", "TimeUS,NDn,DnF1,DnF2,DnF3,DnF4", "s-zzzz", "F-----", "QBffff", AP_HAL::micros64(), ins.get_num_gyro_dynamic_notch_center_frequencies(),
-            notches[0], notches[1], notches[2], notches[3]);
 }
 
 // run notch update at either loop rate or 200Hz
@@ -501,7 +506,6 @@ void AP_Vehicle::accel_cal_update()
 #endif
 #endif // HAL_INS_ENABLED
 }
-
 
 AP_Vehicle *AP_Vehicle::_singleton = nullptr;
 

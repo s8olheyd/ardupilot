@@ -96,7 +96,7 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
 #if GRIPPER_ENABLED == ENABLED
     SCHED_TASK_CLASS(AP_Gripper,          &rover.g2.gripper,       update,         10,   75,  69),
 #endif
-    SCHED_TASK(rpm_update,             10,    100,  72),
+    SCHED_TASK_CLASS(AP_RPM,              &rover.rpm_sensor,       update,         10,  100,  72),
 #if HAL_MOUNT_ENABLED
     SCHED_TASK_CLASS(AP_Mount,            &rover.camera_mount,     update,         50,  200,  75),
 #endif
@@ -130,7 +130,6 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
 #if ADVANCED_FAILSAFE == ENABLED
     SCHED_TASK(afs_fs_check,           10,    200, 129),
 #endif
-    SCHED_TASK(read_airspeed,          10,    100, 132),
 #if HAL_AIS_ENABLED
     SCHED_TASK_CLASS(AP_AIS, &rover.g2.ais, update, 5, 100, 135),
 #endif
@@ -288,6 +287,10 @@ void Rover::ahrs_update()
 
     if (should_log(MASK_LOG_IMU)) {
         AP::ins().Write_IMU();
+    }
+
+    if (should_log(MASK_LOG_VIDEO_STABILISATION)) {
+        ahrs.write_video_stabilisation();
     }
 }
 
