@@ -2960,6 +2960,22 @@ class AutoTestCopter(AutoTest):
         self.wait_waypoint(num_wp-1, num_wp-1)
         self.wait_disarmed()
 
+    # This test will simulate manual behavior of flying a mission in SITL
+    # mode changes are invoked to enable switch-mode attacks
+    # missions should not include automatic takeoff and landing-commands
+    # mission file needs to be located in autotest/ArduCopter_Tests/Autofly/
+    def autofly(self):
+        num_wp = self.load_mission('mission.txt', strict=False)
+        #self.set_parameter('AUTO_OPTIONS', 3)
+        self.change_mode('GUIDED')
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        self.user_takeoff(100)
+        self.change_mode('AUTO')
+        self.wait_waypoint(num_wp-1, num_wp-1)
+        self.change_mode('LAND')
+        self.wait_landed_and_disarmed()
+
     def test_surface_tracking(self):
         ex = None
         self.context_push()
@@ -8168,6 +8184,10 @@ class AutoTestCopter(AutoTest):
             ("IE24",
              "Test IntelligentEnergy 2.4kWh generator",
              self.test_ie24),
+
+            ("Autofly",
+             "Test autofly behavior",
+             self.autofly),
 
             ("LogUpload",
              "Log upload",
