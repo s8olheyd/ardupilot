@@ -42,12 +42,6 @@ void Plane::Log_Write_Attitude(void)
     logger.Write_PID(LOG_PIDS_MSG, steerController.get_pid_info());
 
     AP::ahrs().Log_Write();
-    ahrs.Write_AHRS2();
-
-#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
-    sitl.Log_Write_SIMSTATE();
-#endif
-    ahrs.Write_POS();
 }
 
 // do fast logging for plane
@@ -249,7 +243,7 @@ void Plane::Log_Write_AETR()
         ,elevator : SRV_Channels::get_output_scaled(SRV_Channel::k_elevator)
         ,throttle : SRV_Channels::get_output_scaled(SRV_Channel::k_throttle)
         ,rudder   : SRV_Channels::get_output_scaled(SRV_Channel::k_rudder)
-        ,flap     : SRV_Channels::get_output_scaled(SRV_Channel::k_flap_auto)
+        ,flap     : SRV_Channels::get_slew_limited_output_scaled(SRV_Channel::k_flap_auto)
         ,speed_scaler : get_speed_scaler(),
         };
 

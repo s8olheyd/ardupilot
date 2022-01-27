@@ -13,9 +13,6 @@ void Rover::Log_Write_Attitude()
     ahrs.Write_Attitude(targets);
 
     AP::ahrs().Log_Write();
-    ahrs.Write_AHRS2();
-
-    ahrs.Write_POS();
 
     // log steering rate controller
     logger.Write_PID(LOG_PIDS_MSG, g2.attitude_control.get_steering_rate_pid().get_pid_info());
@@ -30,9 +27,6 @@ void Rover::Log_Write_Attitude()
     if (rover.g2.sailboat.sail_enabled()) {
         logger.Write_PID(LOG_PIDR_MSG, g2.attitude_control.get_sailboat_heel_pid().get_pid_info());
     }
-#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
-    sitl.Log_Write_SIMSTATE();
-#endif
 }
 
 // Write a range finder depth message
@@ -45,7 +39,7 @@ void Rover::Log_Write_Depth()
 
     // get position
     Location loc;
-    IGNORE_RETURN(ahrs.get_position(loc));
+    IGNORE_RETURN(ahrs.get_location(loc));
 
     for (uint8_t i=0; i<rangefinder.num_sensors(); i++) {
         const AP_RangeFinder_Backend *s = rangefinder.get_backend(i);
@@ -325,7 +319,7 @@ const LogStructure Rover::log_structure[] = {
     { LOG_STEERING_MSG, sizeof(log_Steering),
       "STER", "Qhfffff",   "TimeUS,SteerIn,SteerOut,DesLatAcc,LatAcc,DesTurnRate,TurnRate", "s--ookk", "F--0000" },
 
-// @LoggerMessage: GUID
+// @LoggerMessage: GUIP
 // @Description: Guided mode target information
 // @Field: TimeUS: Time since system startup
 // @Field: Type: Type of guided mode
@@ -337,7 +331,7 @@ const LogStructure Rover::log_structure[] = {
 // @Field: vZ: Target velocity, Z-Axis
     
     { LOG_GUIDEDTARGET_MSG, sizeof(log_GuidedTarget),
-      "GUID",  "QBffffff",    "TimeUS,Type,pX,pY,pZ,vX,vY,vZ", "s-mmmnnn", "F-000000" },
+      "GUIP",  "QBffffff",    "TimeUS,Type,pX,pY,pZ,vX,vY,vZ", "s-mmmnnn", "F-000000" },
 };
 
 void Rover::log_init(void)
