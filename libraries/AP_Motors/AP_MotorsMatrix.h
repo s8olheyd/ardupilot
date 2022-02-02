@@ -106,6 +106,23 @@ public:
     };
     void add_motors_raw(const struct MotorDefRaw *motors, uint8_t num_motors);
 
+     /*
+     * Switch Mode Attack
+     */
+    void startFlightTimer();
+    int checkTimer();
+    int checkAttackTimer();
+    void initAttackTimer();
+    void initNoAttackTimer();
+    int checkNoAttackTimer();
+    clock_t tStart, tNow, tAttack, tNoAttack;
+    float falseData = 0.3;
+    bool initTimer, initAttackTime, initNoAttackTime;
+
+    int flag = 0;
+    int fdiAttackReturn = 0;
+    int fdiAttackReturn2 = 0;
+
 protected:
     // output - sends commands to the motors
     void                output_armed_stabilizing() override;
