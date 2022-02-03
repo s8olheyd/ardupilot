@@ -2966,7 +2966,7 @@ class AutoTestCopter(AutoTest):
     # mission file needs to be located in autotest/ArduCopter_Tests/Autofly/
     # mission height should be 50 meters
     def autofly(self):
-        num_wp = self.load_mission('modified_copter.txt', strict=False)
+        num_wp = self.load_mission('mission.txt', strict=False)
         #self.set_parameter('AUTO_OPTIONS', 3)
         self.change_mode('GUIDED')
         self.wait_ready_to_arm()
