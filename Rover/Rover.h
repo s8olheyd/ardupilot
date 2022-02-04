@@ -271,6 +271,8 @@ private:
     bool set_target_location(const Location& target_loc) override;
     bool set_target_velocity_NED(const Vector3f& vel_ned) override;
     bool set_steering_and_throttle(float steering, float throttle) override;
+    // set desired turn rate (degrees/sec) and speed (m/s). Used for scripting
+    bool set_desired_turn_rate_and_speed(float turn_rate, float speed) override;
     bool get_control_output(AP_Vehicle::ControlOutput control_output, float &control_value) override;
 #endif // AP_SCRIPTING_ENABLED
     void stats_update();
@@ -325,7 +327,6 @@ private:
     void Log_Write_GuidedTarget(uint8_t target_type, const Vector3f& pos_target, const Vector3f& vel_target);
     void Log_Write_Nav_Tuning();
     void Log_Write_Sail();
-    void Log_Write_Startup(uint8_t type);
     void Log_Write_Steering();
     void Log_Write_Throttle();
     void Log_Write_RC(void);

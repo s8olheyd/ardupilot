@@ -86,8 +86,6 @@ void NavEKF3_core::EstimateTerrainOffset(const of_elements &ofDataDelayed)
         inhibitGndState = true;
     } else {
         inhibitGndState = false;
-        // record the time we last updated the terrain offset state
-        gndHgtValidTime_ms = imuSampleTime_ms;
 
         // propagate ground position state noise each time this is called using the difference in position since the last observations and an RMS gradient assumption
         // limit distance to prevent intialisation after bad gps causing bad numerical conditioning
@@ -104,9 +102,13 @@ void NavEKF3_core::EstimateTerrainOffset(const of_elements &ofDataDelayed)
 
         // fuse range finder data
         if (rangeDataToFuse) {
+            // reset terrain state if rangefinder data not fused for 5 seconds
+            if (imuSampleTime_ms - gndHgtValidTime_ms > 5000) {
+                terrainState = MAX(rangeDataDelayed.rng * prevTnb.c.z, rngOnGnd) + stateStruct.position.z;
+            }
+
             // predict range
             ftype predRngMeas = MAX((terrainState - stateStruct.position[2]),rngOnGnd) / prevTnb.c.z;
-
             // Copy required states to local variable names
             ftype q0 = stateStruct.quat[0]; // quaternion at optical flow measurement time
             ftype q1 = stateStruct.quat[1]; // quaternion at optical flow measurement time
@@ -146,6 +148,8 @@ void NavEKF3_core::EstimateTerrainOffset(const of_elements &ofDataDelayed)
                 // prevent the state variance from becoming negative
                 Popt = MAX(Popt,0.0f);
 
+                // record the time we last updated the terrain offset state
+                gndHgtValidTime_ms = imuSampleTime_ms;
             }
         }
 
@@ -226,6 +230,9 @@ void NavEKF3_core::EstimateTerrainOffset(const of_elements &ofDataDelayed)
 
                 // prevent the state variances from becoming badly conditioned
                 Popt = MAX(Popt,1E-6f);
+
+                // record the time we last updated the terrain offset state
+                gndHgtValidTime_ms = imuSampleTime_ms;
             }
 
             // fuse X axis data
@@ -737,6 +744,28 @@ void NavEKF3_core::FuseOptFlow(const of_elements &ofDataDelayed, bool really_fus
             }
         }
     }
+
+    // store optical flow rates for use in external calibration
+    flowCalSample.timestamp_ms = imuSampleTime_ms;
+    flowCalSample.flowRate.x = ofDataDelayed.flowRadXY.x;
+    flowCalSample.flowRate.y = ofDataDelayed.flowRadXY.y;
+    flowCalSample.bodyRate.x = ofDataDelayed.bodyRadXYZ.x;
+    flowCalSample.bodyRate.y = ofDataDelayed.bodyRadXYZ.y;
+    flowCalSample.losPred.x = losPred[0];
+    flowCalSample.losPred.y = losPred[1];
+}
+
+// retrieve latest corrected optical flow samples (used for calibration)
+bool NavEKF3_core::getOptFlowSample(uint32_t& timestamp_ms, Vector2f& flowRate, Vector2f& bodyRate, Vector2f& losPred) const
+{
+    if (flowCalSample.timestamp_ms != 0) {
+        timestamp_ms = flowCalSample.timestamp_ms;
+        flowRate = flowCalSample.flowRate;
+        bodyRate = flowCalSample.bodyRate;
+        losPred = flowCalSample.losPred;
+        return true;
+    }
+    return false;
 }
 
 /********************************************************

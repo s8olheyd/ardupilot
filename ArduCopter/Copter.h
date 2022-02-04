@@ -63,7 +63,8 @@
 #include <AP_Arming/AP_Arming.h>            // ArduPilot motor arming library
 #include <AP_SmartRTL/AP_SmartRTL.h>        // ArduPilot Smart Return To Launch Mode (SRTL) library
 #include <AP_TempCalibration/AP_TempCalibration.h>  // temperature calibration library
-#include <AC_AutoTune/AC_AutoTune.h>        // ArduCopter autotune library. support for autotune of multirotors.
+#include <AC_AutoTune/AC_AutoTune_Multi.h>  // ArduCopter autotune library. support for autotune of multirotors.
+#include <AC_AutoTune/AC_AutoTune_Heli.h>   // ArduCopter autotune library. support for autotune of helicopters.
 #include <AP_Parachute/AP_Parachute.h>      // ArduPilot parachute release library
 #include <AC_Sprayer/AC_Sprayer.h>          // Crop sprayer library
 #include <AP_ADSB/AP_ADSB.h>                // ADS-B RF based collision avoidance module library
@@ -357,13 +358,15 @@ private:
             uint8_t unused3                 : 1; // 25      // was compass_init_location; true when the compass's initial location has been set
             uint8_t unused2                 : 1; // 26      // aux switch rc_override is allowed
             uint8_t armed_with_airmode_switch : 1; // 27      // we armed using a arming switch
+            uint8_t prec_land_active        : 1; // 28      // true if precland is active
         };
         uint32_t value;
     } ap_t;
 
     ap_t ap;
 
-    AirMode air_mode; // air mode is 0 = not-configured ; 1 = disabled; 2 = enabled
+    AirMode air_mode; // air mode is 0 = not-configured ; 1 = disabled; 2 = enabled;
+    bool force_flying; // force flying is enabled when true;
 
     static_assert(sizeof(uint32_t) == sizeof(ap), "ap_t must be uint32_t");
 
@@ -606,6 +609,7 @@ private:
     enum class FlightOptions {
         DISABLE_THRUST_LOSS_CHECK     = (1<<0),   // 1
         DISABLE_YAW_IMBALANCE_WARNING = (1<<1),   // 2
+        RELEASE_GRIPPER_ON_THRUST_LOSS = (1<<2),  // 4
     };
 
     static constexpr int8_t _failsafe_priorities[] = {

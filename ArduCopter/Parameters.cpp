@@ -933,7 +933,7 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
 
 #if AUTOTUNE_ENABLED == ENABLED
     // @Group: AUTOTUNE_
-    // @Path: ../libraries/AC_AutoTune/AC_AutoTune.cpp
+    // @Path: ../libraries/AC_AutoTune/AC_AutoTune_Multi.cpp,../libraries/AC_AutoTune/AC_AutoTune_Heli.cpp
     AP_SUBGROUPPTR(autotune_ptr, "AUTOTUNE_",  29, ParametersG2, AutoTune),
 #endif
 
@@ -1042,7 +1042,7 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @Param: FLIGHT_OPTIONS
     // @DisplayName: Flight mode options
     // @Description: Flight mode specific options
-    // @Bitmask: 0:Disable thrust loss check, 1:Disable yaw imbalance warning
+    // @Bitmask: 0:Disable thrust loss check, 1:Disable yaw imbalance warning, 2:Release gripper on thrust loss
     // @User: Advanced
     AP_GROUPINFO("FLIGHT_OPTIONS", 44, ParametersG2, flight_options, 0),
 

@@ -1999,6 +1999,89 @@ class AutoTestCopter(AutoTest):
         if ex is not None:
             raise ex
 
+    # fly_optical_flow_calibration - test optical flow calibration
+    def fly_optical_flow_calibration(self):
+        ex = None
+        self.context_push()
+        try:
+
+            self.set_parameter("SIM_FLOW_ENABLE", 1)
+            self.set_parameter("FLOW_TYPE", 10)
+            self.set_analog_rangefinder_parameters()
+
+            # RC9 starts/stops calibration
+            self.set_parameter("RC9_OPTION", 158)
+
+            # initialise flow scaling parameters to incorrect values
+            self.set_parameter("FLOW_FXSCALER", -200)
+            self.set_parameter("FLOW_FYSCALER", 200)
+
+            self.reboot_sitl()
+
+            # ensure calibration is off
+            self.set_rc(9, 1000)
+
+            # takeoff to 10m in loiter
+            self.takeoff(10, mode="LOITER", require_absolute=True, timeout=720)
+
+            # start calibration
+            self.set_rc(9, 2000)
+
+            tstart = self.get_sim_time()
+            timeout = 90
+            veh_dir_tstart = self.get_sim_time()
+            veh_dir = 0
+            while self.get_sim_time_cached() - tstart < timeout:
+                # roll and pitch vehicle until samples collected
+                # change direction of movement every 2 seconds
+                if self.get_sim_time_cached() - veh_dir_tstart > 2:
+                    veh_dir_tstart = self.get_sim_time()
+                    veh_dir = veh_dir + 1
+                    if veh_dir > 3:
+                        veh_dir = 0
+                if veh_dir == 0:
+                    # move right
+                    self.set_rc(1, 1800)
+                    self.set_rc(2, 1500)
+                if veh_dir == 1:
+                    # move left
+                    self.set_rc(1, 1200)
+                    self.set_rc(2, 1500)
+                if veh_dir == 2:
+                    # move forward
+                    self.set_rc(1, 1500)
+                    self.set_rc(2, 1200)
+                if veh_dir == 3:
+                    # move back
+                    self.set_rc(1, 1500)
+                    self.set_rc(2, 1800)
+
+            # return sticks to center
+            self.set_rc(1, 1500)
+            self.set_rc(2, 1500)
+
+            # stop calibration (not actually necessary)
+            self.set_rc(9, 1000)
+
+            # check scaling parameters have been restored to values near zero
+            flow_scalar_x = self.get_parameter("FLOW_FXSCALER")
+            flow_scalar_y = self.get_parameter("FLOW_FYSCALER")
+            if ((flow_scalar_x > 30) or (flow_scalar_x < -30)):
+                raise NotAchievedException("FlowCal failed to set FLOW_FXSCALER correctly")
+            if ((flow_scalar_y > 30) or (flow_scalar_y < -30)):
+                raise NotAchievedException("FlowCal failed to set FLOW_FYSCALER correctly")
+
+        except Exception as e:
+            self.print_exception_caught(e)
+            ex = e
+
+        self.context_pop()
+        self.disarm_vehicle(force=True)
+        self.reboot_sitl()
+
+        if ex is not None:
+            raise ex
+
     def fly_autotune(self):
         """Test autotune mode"""
 
@@ -2263,6 +2346,52 @@ class AutoTestCopter(AutoTest):
         self.progress("############################### All GPS Order Cases Tests Passed")
         self.context_pop()
         self.fly_auto_test()
+
+    # test takeoff altitude
+    def test_takeoff_alt(self):
+        # Test case #1 (set target altitude to relative -10m from the ground, -10m is invalid, so it is set to 1m)
+        self.progress("Testing relative alt from the ground")
+        self.do_takeoff_alt("copter_takeoff.txt", 1, False)
+        # Test case #2 (set target altitude to relative -10m during flight, -10m is invalid, so keeps current altitude)
+        self.progress("Testing relative alt during flight")
+        self.do_takeoff_alt("copter_takeoff.txt", 10, True)
+
+        self.progress("Takeoff mission completed: passed!")
+
+    def do_takeoff_alt(self, mission_file, target_alt, during_flight=False):
+        self.progress("# Load %s" % mission_file)
+        # load the waypoint count
+        num_wp = self.load_mission(mission_file, strict=False)
+        if not num_wp:
+            raise NotAchievedException("load %s failed" % mission_file)
+
+        self.set_current_waypoint(1)
+
+        self.change_mode("GUIDED")
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+
+        if during_flight:
+            self.user_takeoff(alt_min=target_alt)
+
+        # switch into AUTO mode and raise throttle
+        self.change_mode("AUTO")
+        self.set_rc(3, 1500)
+
+        # fly the mission
+        self.wait_waypoint(0, num_wp-1, timeout=500)
+
+        # altitude check
+        self.wait_altitude(target_alt - 1 , target_alt + 1, relative=True)
+
+        self.change_mode('LAND')
+
+        # set throttle to minimum
+        self.zero_throttle()
+
+        # wait for disarm
+        self.wait_disarmed()
+        self.progress("MOTORS DISARMED OK")
 
     def fly_motor_fail(self, fail_servo=0, fail_mul=0.0, holdtime=30):
         """Test flight with reduced motor efficiency"""
@@ -8036,6 +8165,10 @@ class AutoTestCopter(AutoTest):
              "Fly Optical Flow limits",
              self.fly_optical_flow_limits),  # 27s
 
+            ("OpticalFlowCalibration",
+             "Fly Optical Flow calibration",
+             self.fly_optical_flow_calibration),
+
             ("MotorFail",
              "Fly motor failure test",
              self.fly_motor_fail),
@@ -8047,6 +8180,10 @@ class AutoTestCopter(AutoTest):
             ("CopterMission",
              "Fly copter mission",
              self.fly_auto_test),  # 37s
+
+            ("TakeoffAlt",
+             "Test Takeoff command altitude",
+             self.test_takeoff_alt), # 12s
 
             ("SplineLastWaypoint",
              "Test Spline as last waypoint",

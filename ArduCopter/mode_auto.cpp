@@ -258,7 +258,7 @@ void ModeAuto::takeoff_start(const Location& dest_loc)
     }
 
     // sanity check target
-    float alt_target_min_cm = copter.current_loc.alt + (copter.ap.land_complete ? 100 : 0);
+    int32_t alt_target_min_cm = copter.current_loc.alt + (copter.ap.land_complete ? 100 : 0);
     if (alt_target < alt_target_min_cm ) {
         dest.set_alt_cm(alt_target_min_cm , Location::AltFrame::ABOVE_HOME);
     }
@@ -335,6 +335,12 @@ void ModeAuto::land_start(const Vector2f& destination)
     // disable the fence on landing
     copter.fence.auto_disable_fence_for_landing();
 #endif
+
+    // reset flag indicating if pilot has applied roll or pitch inputs during landing
+    copter.ap.land_repo_active = false;
+
+    // this will be set true if prec land is later active
+    copter.ap.prec_land_active = false;
 }
 
 // auto_circle_movetoedge_start - initialise waypoint controller to move to edge of a circle with it's center at the specified location

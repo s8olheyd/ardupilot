@@ -501,7 +501,7 @@ bool AP_GPS::vertical_accuracy(uint8_t instance, float &vacc) const
 /**
    convert GPS week and milliseconds to unix epoch in milliseconds
  */
-uint64_t AP_GPS::time_epoch_convert(uint16_t gps_week, uint32_t gps_ms)
+uint64_t AP_GPS::istate_time_to_epoch_ms(uint16_t gps_week, uint32_t gps_ms)
 {
     uint64_t fix_time_ms = UNIX_OFFSET_MSEC + gps_week * AP_MSEC_PER_WEEK + gps_ms;
     return fix_time_ms;
@@ -519,10 +519,10 @@ uint64_t AP_GPS::time_epoch_usec(uint8_t instance) const
     uint64_t fix_time_ms;
     // add in the time since the last fix message
     if (istate.last_corrected_gps_time_us != 0) {
-        fix_time_ms = time_epoch_convert(istate.time_week, drivers[instance]->get_last_itow());
+        fix_time_ms = istate_time_to_epoch_ms(istate.time_week, drivers[instance]->get_last_itow_ms());
         return (fix_time_ms*1000ULL) + (AP_HAL::micros64() - istate.last_corrected_gps_time_us);
     } else {
-        fix_time_ms = time_epoch_convert(istate.time_week, istate.time_week_ms) * 1000ULL;
+        fix_time_ms = istate_time_to_epoch_ms(istate.time_week, istate.time_week_ms);
         return (fix_time_ms + (AP_HAL::millis() - istate.last_gps_time_ms)) * 1000ULL;
     }
 }
@@ -536,7 +536,7 @@ uint64_t AP_GPS::last_message_epoch_usec(uint8_t instance) const
     if (istate.time_week == 0) {
         return 0;
     }
-    return time_epoch_convert(istate.time_week, drivers[instance]->get_last_itow()) * 1000ULL;
+    return istate_time_to_epoch_ms(istate.time_week, drivers[instance]->get_last_itow_ms()) * 1000ULL;
 }
 
 /*
@@ -560,19 +560,16 @@ void AP_GPS::send_blob_update(uint8_t instance)
         return;
     }
 
-    // see if we can write some more of the initialisation blob
-    if (initblob_state[instance].remaining > 0) {
-        int16_t space = _port[instance]->txspace();
-        if (space > (int16_t)initblob_state[instance].remaining) {
-            space = initblob_state[instance].remaining;
-        }
-        while (space > 0) {
-            _port[instance]->write(*initblob_state[instance].blob);
-            initblob_state[instance].blob++;
-            space--;
-            initblob_state[instance].remaining--;
-        }
+    if (initblob_state[instance].remaining == 0) {
+        return;
     }
+
+    // see if we can write some more of the initialisation blob
+    const uint16_t n = MIN(_port[instance]->txspace(),
+                           initblob_state[instance].remaining);
+    const size_t written = _port[instance]->write((const uint8_t*)initblob_state[instance].blob, n);
+    initblob_state[instance].blob += written;
+    initblob_state[instance].remaining -= written;
 }
 
 /*
@@ -2023,7 +2020,7 @@ uint32_t AP_GPS::get_itow(uint8_t instance) const
     if (instance >= GPS_MAX_RECEIVERS || drivers[instance] == nullptr) {
         return 0;
     }
-    return drivers[instance]->get_last_itow();
+    return drivers[instance]->get_last_itow_ms();
 }
 
 bool AP_GPS::get_error_codes(uint8_t instance, uint32_t &error_codes) const

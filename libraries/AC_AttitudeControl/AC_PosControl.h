@@ -243,16 +243,16 @@ public:
 
     /// Position
 
-    /// set_pos_target_xy_cm - sets the position target in NEU cm from home
+    /// set_pos_target_xy_cm - sets the position target, frame NEU in cm relative to the EKF origin
     void set_pos_target_xy_cm(float pos_x, float pos_y) { _pos_target.x = pos_x; _pos_target.y = pos_y; }
 
-    /// get_pos_target_cm - returns the position target in NEU cm from home
+    /// get_pos_target_cm - returns the position target, frame NEU in cm relative to the EKF origin
     const Vector3p& get_pos_target_cm() const { return _pos_target; }
 
-    /// set_pos_target_z_cm - set altitude target in cm above home
+    /// set_pos_target_z_cm - set altitude target in cm above the EKF origin
     void set_pos_target_z_cm(float pos_target) { _pos_target.z = pos_target; }
 
-    /// get_pos_target_z_cm - get target altitude (in cm above home)
+    /// get_pos_target_z_cm - get target altitude (in cm above the EKF origin)
     float get_pos_target_z_cm() const { return _pos_target.z; }
 
     /// get_stopping_point_xy_cm - calculates stopping point in NEU cm based on current position, velocity, vehicle acceleration
@@ -303,13 +303,13 @@ public:
 
     /// Offset
 
-    /// set_pos_offset_target_z_cm - set altitude offset target in cm above home
+    /// set_pos_offset_target_z_cm - set altitude offset target in cm above the EKF origin
     void set_pos_offset_target_z_cm(float pos_offset_target_z) { _pos_offset_target_z = pos_offset_target_z; }
 
-    /// set_pos_offset_z_cm - set altitude offset in cm above home
+    /// set_pos_offset_z_cm - set altitude offset in cm above the EKF origin
     void set_pos_offset_z_cm(float pos_offset_z) { _pos_offset_z = pos_offset_z; }
 
-    /// get_pos_offset_z_cm - returns altitude offset in cm above home
+    /// get_pos_offset_z_cm - returns altitude offset in cm above the EKF origin
     float get_pos_offset_z_cm() const { return _pos_offset_z; }
 
     /// get_vel_offset_z_cm - returns current vertical offset speed in cm/s
@@ -354,9 +354,6 @@ public:
     ///     this prevents integrator buildup
     void set_externally_limited_xy() { _limit_vector.x = _accel_target.x; _limit_vector.y = _accel_target.y; }
 
-    // overrides the velocity process variable for one timestep
-    void override_vehicle_velocity_xy(const Vector2f& vel_xy) { _vehicle_horiz_vel = vel_xy; _flags.vehicle_horiz_vel_override = true; }
-
     // lean_angles_to_accel - convert roll, pitch lean angles to lat/lon frame accelerations in cm/s/s
     Vector3f lean_angles_to_accel(const Vector3f& att_target_euler) const;
 
@@ -386,11 +383,6 @@ public:
     static const struct AP_Param::GroupInfo var_info[];
 
 protected:
-
-    // general purpose flags
-    struct poscontrol_flags {
-            uint16_t vehicle_horiz_vel_override : 1; // 1 if we should use _vehicle_horiz_vel as our velocity process variable for one timestep
-    } _flags;
 
     // get throttle using vibration-resistant calculation (uses feed forward with manually calculated gain)
     float get_throttle_with_vibration_override();
@@ -452,15 +444,15 @@ protected:
     float       _yaw_rate_target;       // desired yaw rate in centi-degrees per second calculated by position controller
 
     // position controller internal variables
-    Vector3p    _pos_target;            // target location in NEU cm from home
+    Vector3p    _pos_target;            // target location, frame NEU in cm relative to the EKF origin
     Vector3f    _vel_desired;           // desired velocity in NEU cm/s
     Vector3f    _vel_target;            // velocity target in NEU cm/s calculated by pos_to_rate step
     Vector3f    _accel_desired;         // desired acceleration in NEU cm/s/s (feed forward)
     Vector3f    _accel_target;          // acceleration target in NEU cm/s/s
     Vector3f    _limit_vector;          // the direction that the position controller is limited, zero when not limited
-    Vector2f    _vehicle_horiz_vel;     // velocity to use if _flags.vehicle_horiz_vel_override is set
-    float       _pos_offset_target_z;   // vertical position offset target in NEU cm from home
-    float       _pos_offset_z;          // vertical position offset in NEU cm from home
+
+    float       _pos_offset_target_z;   // vertical position offset target, frame NEU in cm relative to the EKF origin
+    float       _pos_offset_z;          // vertical position offset, frame NEU in cm relative to the EKF origin
     float       _vel_offset_z;          // vertical velocity offset in NEU cm/s calculated by pos_to_rate step
     float       _accel_offset_z;        // vertical acceleration offset in NEU cm/s/s
 

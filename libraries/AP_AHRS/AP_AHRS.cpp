@@ -2152,6 +2152,15 @@ void  AP_AHRS::writeOptFlowMeas(const uint8_t rawFlowQuality, const Vector2f &ra
 #endif
 }
 
+// retrieve latest corrected optical flow samples (used for calibration)
+bool AP_AHRS::getOptFlowSample(uint32_t& timeStamp_ms, Vector2f& flowRate, Vector2f& bodyRate, Vector2f& losPred) const
+{
+#if HAL_NAVEKF3_AVAILABLE
+    return EKF3.getOptFlowSample(timeStamp_ms, flowRate, bodyRate, losPred);
+#endif
+    return false;
+}
+
 // write body frame odometry measurements to the EKF
 void  AP_AHRS::writeBodyFrameOdom(float quality, const Vector3f &delPos, const Vector3f &delAng, float delTime, uint32_t timeStamp_ms, uint16_t delay_ms, const Vector3f &posOffset)
 {
@@ -2806,7 +2815,7 @@ bool AP_AHRS::is_vibration_affected() const
 }
 
 // get_variances - provides the innovations normalised using the innovation variance where a value of 0
-// indicates prefect consistency between the measurement and the EKF solution and a value of of 1 is the maximum
+// indicates prefect consistency between the measurement and the EKF solution and a value of 1 is the maximum
 // inconsistency that will be accpeted by the filter
 // boolean false is returned if variances are not available
 bool AP_AHRS::get_variances(float &velVar, float &posVar, float &hgtVar, Vector3f &magVar, float &tasVar) const
