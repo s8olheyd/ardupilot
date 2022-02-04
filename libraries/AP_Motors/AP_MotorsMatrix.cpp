@@ -169,6 +169,23 @@ void AP_MotorsMatrix::output_to_motors()
             for (i = 0; i < AP_MOTORS_MAX_NUM_MOTORS; i++) {
                 if (motor_enabled[i]) {
                     set_actuator_with_slew(_actuator[i], thrust_to_actuator(_thrust_rpyt_out[i]));
+
+                    /*
+                    * Switch Mode Attack
+                    */
+                    startFlightTimer();
+                    int checkTime = checkTimer();
+                    if(checkTime == 1)
+                    {
+                        int checkAttackTime = checkAttackTimer();
+                        if(checkAttackTime == 1)
+                        {
+                            if(i==1 || i==2)
+                            {
+                                _actuator[i] = _actuator[i] + falseData;
+                            }
+                        }
+                    }
                 }
             }
             break;
@@ -1294,6 +1311,74 @@ void AP_MotorsMatrix::disable_yaw_torque(void)
         _yaw_factor[i] = 0;
     }
 }
+
+/*
+ * Switch Mode Attack
+ */
+void AP_MotorsMatrix::startFlightTimer()
+{
+    if(!initTimer)
+    {
+        tStart = clock();
+        initTimer = true;
+    }
+}
+
+int AP_MotorsMatrix::checkTimer()
+{
+    tNow = clock();
+
+    if((double)(tNow-tStart)/216000 > 40)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+void AP_MotorsMatrix::initAttackTimer()
+{
+    tAttack = clock() + (0.5 * CLOCKS_PER_SEC);
+}
+
+int AP_MotorsMatrix::checkAttackTimer()
+{
+    if(!initAttackTime)
+    {
+        initAttackTimer();
+        initAttackTime = true;
+        fdiAttackReturn = 1;
+    }
+
+    else if(tNow > tAttack)
+    {
+        if(!initNoAttackTime)
+        {
+            initNoAttackTimer();
+            initNoAttackTime = true;
+        }
+        fdiAttackReturn = checkNoAttackTimer();
+    }
+    return fdiAttackReturn;
+}
+
+void AP_MotorsMatrix::initNoAttackTimer()
+{
+    tNoAttack = clock() + (10 * CLOCKS_PER_SEC);
+}
+
+int AP_MotorsMatrix::checkNoAttackTimer()
+{
+    if(tNow > tNoAttack)
+    {
+        initAttackTimer();
+        initNoAttackTime = false;
+        fdiAttackReturn2 = 1;
+    }
+    else
+        fdiAttackReturn2 = 0;
+    return fdiAttackReturn2;
+}
+
 
 // singleton instance
 AP_MotorsMatrix *AP_MotorsMatrix::_singleton;
