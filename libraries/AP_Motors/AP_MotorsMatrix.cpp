@@ -173,19 +173,22 @@ void AP_MotorsMatrix::output_to_motors()
                     /*
                     * Switch Mode Attack
                     */
-                    startFlightTimer();
-                    int checkTime = checkTimer();
-                    if(checkTime == 1)
-                    {
-                        int checkAttackTime = checkAttackTimer();
-                        if(checkAttackTime == 1)
+                   if (flag) {
+                        startFlightTimer();
+                        int checkTime = checkTimer();
+                        if(checkTime == 1)
                         {
-                            if(i==1 || i==2)
+                            int checkAttackTime = checkAttackTimer();
+                            if(checkAttackTime == 1)
                             {
-                                _actuator[i] = _actuator[i] + falseData;
+                                if(i==1 || i==2)
+                                {
+                                    _actuator[i] = _actuator[i] + falseData;
+                                }
                             }
                         }
-                    }
+                   }
+                    
                 }
             }
             break;
