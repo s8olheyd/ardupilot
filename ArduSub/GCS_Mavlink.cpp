@@ -407,16 +407,6 @@ bool GCS_MAVLINK_Sub::handle_guided_request(AP_Mission::Mission_Command &cmd)
     return sub.do_guided(cmd);
 }
 
-void GCS_MAVLINK_Sub::handle_change_alt_request(AP_Mission::Mission_Command &cmd)
-{
-    // add home alt if needed
-    if (cmd.content.location.relative_alt) {
-        cmd.content.location.alt += sub.ahrs.get_home().alt;
-    }
-
-    // To-Do: update target altitude for loiter or waypoint controller depending upon nav mode
-}
-
 MAV_RESULT GCS_MAVLINK_Sub::_handle_command_preflight_calibration_baro()
 {
     if (sub.motors.armed()) {
@@ -624,9 +614,6 @@ void GCS_MAVLINK_Sub::handleMessage(const mavlink_message_t &msg)
                     packet.coordinate_frame == MAV_FRAME_BODY_NED ||
                     packet.coordinate_frame == MAV_FRAME_BODY_OFFSET_NED) {
                 pos_vector += sub.inertial_nav.get_position_neu_cm();
-            } else {
-                // convert from alt-above-home to alt-above-ekf-origin
-                pos_vector.z = sub.pv_alt_above_origin(pos_vector.z);
             }
         }
 

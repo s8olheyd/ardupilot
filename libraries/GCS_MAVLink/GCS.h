@@ -308,6 +308,7 @@ public:
     void send_gimbal_report() const;
     void send_home_position() const;
     void send_gps_global_origin() const;
+    virtual void send_attitude_target() {};
     virtual void send_position_target_global_int() { };
     virtual void send_position_target_local_ned() { };
     void send_servo_output_raw();
@@ -609,7 +610,14 @@ protected:
      */
     uint32_t correct_offboard_timestamp_usec_to_ms(uint64_t offboard_usec, uint16_t payload_size);
 
-    static void convert_COMMAND_LONG_to_COMMAND_INT(const mavlink_command_long_t &in, mavlink_command_int_t &out);
+    // converts a COMMAND_LONG packet to a COMMAND_INT packet, where
+    // the command-long packet is assumed to be in the supplied frame.
+    // If location is not present in the command then just omit frame.
+    static void convert_COMMAND_LONG_to_COMMAND_INT(const mavlink_command_long_t &in, mavlink_command_int_t &out, MAV_FRAME frame = MAV_FRAME_GLOBAL_RELATIVE_ALT);
+
+    // methods to extract a Location object from a command_long or command_int
+    bool location_from_command_t(const mavlink_command_long_t &in, MAV_FRAME in_frame, Location &out);
+    bool location_from_command_t(const mavlink_command_int_t &in, Location &out);
 
 private:
 
@@ -862,7 +870,7 @@ private:
     void send_distance_sensor(const class AP_RangeFinder_Backend *sensor, const uint8_t instance) const;
 
     virtual bool handle_guided_request(AP_Mission::Mission_Command &cmd) = 0;
-    virtual void handle_change_alt_request(AP_Mission::Mission_Command &cmd) = 0;
+    virtual void handle_change_alt_request(AP_Mission::Mission_Command &cmd) {};
     void handle_common_mission_message(const mavlink_message_t &msg);
 
     void handle_vicon_position_estimate(const mavlink_message_t &msg);

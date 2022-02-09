@@ -77,6 +77,29 @@ MAV_STATE GCS_MAVLINK_Copter::vehicle_system_status() const
 }
 
 
+void GCS_MAVLINK_Copter::send_attitude_target()
+{
+    const Quaternion quat  = copter.attitude_control->get_attitude_target_quat();
+    const Vector3f ang_vel = copter.attitude_control->get_attitude_target_ang_vel();
+    const float thrust = copter.attitude_control->get_throttle_in();
+
+    const float quat_out[4] {quat.q1, quat.q2, quat.q3, quat.q4};
+
+    // Note: When sending out the attitude_target info. we send out all of info. no matter the mavlink typemask
+    // This way we send out the maximum information that can be used by the sending control systems to adapt their generated trajectories
+    const uint16_t typemask = 0;    // Ignore nothing
+
+    mavlink_msg_attitude_target_send(
+        chan,
+        AP_HAL::millis(),       // time since boot (ms)
+        typemask,               // Bitmask that tells the system what control dimensions should be ignored by the vehicle
+        quat_out,               // Attitude quaternion [w, x, y, z] order, zero-rotation is [1, 0, 0, 0], unit-length
+        ang_vel.x,              // roll rate (rad/s)
+        ang_vel.y,              // pitch rate (rad/s)
+        ang_vel.z,              // yaw rate (rad/s)
+        thrust);                // Collective thrust, normalized to 0 .. 1
+}
+
 void GCS_MAVLINK_Copter::send_position_target_global_int()
 {
     Location target;
@@ -536,16 +559,6 @@ bool GCS_MAVLINK_Copter::handle_guided_request(AP_Mission::Mission_Command &cmd)
 #endif
 }
 
-void GCS_MAVLINK_Copter::handle_change_alt_request(AP_Mission::Mission_Command &cmd)
-{
-    // add home alt if needed
-    if (cmd.content.location.relative_alt) {
-        cmd.content.location.alt += copter.ahrs.get_home().alt;
-    }
-
-    // To-Do: update target altitude for loiter or waypoint controller depending upon nav mode
-}
-
 void GCS_MAVLINK_Copter::packetReceived(const mavlink_status_t &status,
                                         const mavlink_message_t &msg)
 {
@@ -653,19 +666,10 @@ MAV_RESULT GCS_MAVLINK_Copter::handle_command_int_do_reposition(const mavlink_co
         return MAV_RESULT_DENIED;
     }
 
-    Location request_location {};
-    request_location.lat = packet.x;
-    request_location.lng = packet.y;
-
-    if (fabsf(packet.z) > LOCATION_ALT_MAX_M) {
+    Location request_location;
+    if (!location_from_command_t(packet, request_location)) {
         return MAV_RESULT_DENIED;
     }
-
-    Location::AltFrame frame;
-    if (!mavlink_coordinate_frame_to_location_alt_frame((MAV_FRAME)packet.frame, frame)) {
-        return MAV_RESULT_DENIED; // failed as the location is not valid
-    }
-    request_location.set_alt_cm((int32_t)(packet.z * 100.0f), frame);
 
     if (request_location.sanitize(copter.current_loc)) {
         // if the location wasn't already sane don't load it

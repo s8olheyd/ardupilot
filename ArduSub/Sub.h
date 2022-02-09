@@ -363,7 +363,7 @@ private:
 
     // terrain handling
 #if AP_TERRAIN_AVAILABLE
-    AP_Terrain terrain{mission};
+    AP_Terrain terrain;
 #endif
 
     // used to allow attitude and depth control without a position system
@@ -516,8 +516,6 @@ private:
     void set_surfaced(bool at_surface);
     void set_bottomed(bool at_bottom);
     void motors_output();
-    Vector3f pv_location_to_vector(const Location& loc);
-    float pv_alt_above_origin(float alt_above_home_cm);
     void init_rc_in();
     void init_rc_out();
     void enable_motor_output();

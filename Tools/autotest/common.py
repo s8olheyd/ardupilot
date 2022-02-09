@@ -3049,7 +3049,10 @@ class AutoTest(ABC):
             self.last_sim_time_cached = ret
             self.last_sim_time_cached_wallclock = time.time()
         else:
-            if time.time() - self.last_sim_time_cached_wallclock > 30:
+            timeout = 30
+            if self.valgrind:
+                timeout *= 10
+            if time.time() - self.last_sim_time_cached_wallclock > timeout:
                 raise AutoTestTimeoutException("sim_time_cached is not updating!")
         return ret
 
@@ -5906,7 +5909,12 @@ class AutoTest(ABC):
             if self.get_sim_time() - tstart > timeout:
                 raise AutoTestTimeoutException("Did not get wanted current waypoint")
             seq = self.mav.waypoint_current()
-            self.progress("Waiting for wp=%u current=%u" % (wpnum, seq))
+            wp_dist = None
+            try:
+                wp_dist = self.mav.messages['NAV_CONTROLLER_OUTPUT'].wp_dist
+            except (KeyError, AttributeError):
+                pass
+            self.progress("Waiting for wp=%u current=%u dist=%sm" % (wpnum, seq, wp_dist))
             if seq == wpnum:
                 break
 
@@ -6375,7 +6383,7 @@ Also, ignores heartbeats not from our target system'''
                 source_system=250,
                 source_component=250,
                 autoreconnect=True,
-                dialect="ardupilotmega",  # if we don't pass this in we end up with the wrong mavlink version...
+                dialect="all",  # if we don't pass this in we end up with the wrong mavlink version...
             )
         except Exception as msg:
             self.progress("Failed to start mavlink connection on %s: %s" %
@@ -6570,8 +6578,12 @@ Also, ignores heartbeats not from our target system'''
             self.progress("Armed at end of test; force-rebooting SITL")
             self.disarm_vehicle(force=True)
             self.forced_post_test_sitl_reboots += 1
-            self.progress("Force-resetting SITL")
-            self.reboot_sitl() # that'll learn it
+            if reset_needed:
+                self.progress("Force-resetting SITL")
+                self.reset_SITL_commandline()
+            else:
+                self.progress("Force-rebooting SITL")
+                self.reboot_sitl() # that'll learn it
             passed = False
 
         if self._mavproxy is not None:
